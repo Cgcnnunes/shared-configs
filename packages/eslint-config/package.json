@@ -1,0 +1,51 @@
+{
+  "name": "@cgcnnunes/eslint-config",
+  "version": "0.1.0",
+  "description": "Composable JavaScript and type-aware TypeScript ESLint flat configs.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^22.22.2 || >=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cgcnnunes/shared-configs.git",
+    "directory": "packages/eslint-config"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "*.mjs",
+    "*.d.ts",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs"
+    },
+    "./typescript": {
+      "types": "./typescript.d.ts",
+      "import": "./typescript.mjs"
+    }
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-perfectionist": "^5.13.0",
+    "typescript-eslint": "^8.72.2"
+  },
+  "peerDependencies": {
+    "eslint": "^10.14.0",
+    "typescript": ">=4.8.4 <6.1.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}

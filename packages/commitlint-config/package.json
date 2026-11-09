@@ -1,0 +1,38 @@
+{
+  "name": "@cgcnnunes/commitlint-config",
+  "version": "0.1.0",
+  "description": "Commitlint factory for app-specific five-digit commit scopes.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^22.22.2 || >=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cgcnnunes/shared-configs.git",
+    "directory": "packages/commitlint-config"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.mjs",
+    "index.d.ts",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs"
+    }
+  },
+  "dependencies": {
+    "@commitlint/types": "^21.2.3",
+    "@types/node": "^22.15.30"
+  },
+  "peerDependencies": {
+    "@commitlint/cli": "^21.2.4"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "shared-configs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^22.22.2 || >=24"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "test": "node --test tests/*.test.mjs",
+    "test:package": "node --test tests/packaging.mjs",
+    "verify": "npm run format:check && npm run lint && npm test && npm run test:package"
+  },
+  "prettier": "@cgcnnunes/prettier-config",
+  "overrides": {
+    "minimatch": "^11.0.1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/lint": "^21.2.4",
+    "@commitlint/load": "^21.2.4",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3"
+  }
+}
