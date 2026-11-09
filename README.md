@@ -140,9 +140,10 @@ and published exports/declarations.
 
 ## Releases and account setup
 
-Use feature branches and PRs. This repository uses its own appName, shared-configs, for subjects;
-the config validates syntax but does not allocate IDs. There are no installed Git hooks. CI runs npm
-run verify on PRs and main pushes; configure branch protection separately.
+Use feature branches and PRs. Only this repository uses appName config for commit subjects and PR
+titles, for example `feat(config-00001): add a preset`. Consumer apps keep their own appName. The
+config validates syntax but does not allocate IDs. There are no installed Git hooks. CI runs npm run
+verify on PRs and main pushes; configure branch protection separately.
 
 Before the first publication:
 

@@ -3,6 +3,7 @@ import lint from '@commitlint/lint';
 import load from '@commitlint/load';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import repositoryConfig from '../commitlint.config.mjs';
 
 async function check(message, appName = 'reader') {
   const config = await load(createCommitlintConfig({ appName }));
@@ -12,6 +13,25 @@ async function check(message, appName = 'reader') {
     plugins: config.plugins,
   });
 }
+
+test('repository config requires config scopes without changing consumer prefixes', async () => {
+  const config = await load(repositoryConfig);
+  const options = { defaultIgnores: config.defaultIgnores, plugins: config.plugins };
+
+  assert.equal((await lint('fix(config-00003): update scopes', config.rules, options)).valid, true);
+
+  for (const scope of ['shared-configs-00003', 'reader-00003', 'config-0003', 'config-00000']) {
+    assert.equal(
+      (await lint(`fix(${scope}): update scopes`, config.rules, options)).valid,
+      false,
+      scope,
+    );
+  }
+
+  assert.equal((await check('fix(reader-00003): update scopes')).valid, true);
+
+  assert.equal((await check('fix(my-app-00003): update scopes', 'my-app')).valid, true);
+});
 
 test('allows every supported type, bodies, footers and both ID boundaries', async () => {
   for (const type of ['feat', 'chore', 'refactor', 'fix', 'doc']) {
