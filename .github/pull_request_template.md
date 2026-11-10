@@ -19,11 +19,15 @@
 - [ ] @cgcnnunes/eslint-config: Initial release
 - [ ] @cgcnnunes/eslint-config: No release
 
+---
+
 - [ ] @cgcnnunes/prettier-config: Major
 - [ ] @cgcnnunes/prettier-config: Minor
 - [ ] @cgcnnunes/prettier-config: Patch
 - [ ] @cgcnnunes/prettier-config: Initial release
 - [ ] @cgcnnunes/prettier-config: No release
+
+---
 
 - [ ] @cgcnnunes/commitlint-config: Major
 - [ ] @cgcnnunes/commitlint-config: Minor
