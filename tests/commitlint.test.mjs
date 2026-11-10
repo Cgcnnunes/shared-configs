@@ -106,6 +106,7 @@ test('enforces the exact 120-character subject boundary, not the body length', a
 
 test('allows composing app-local history rules without losing shared validation', async () => {
   const shared = createCommitlintConfig({ appName: 'reader' });
+  const mockLocalSequence = () => [false, 'Expected the next local number.'];
 
   const config = await load({
     ...shared,
@@ -113,7 +114,7 @@ test('allows composing app-local history rules without losing shared validation'
       {
         rules: {
           ...shared.plugins[0].rules,
-          'local-sequence': () => [false, 'Expected the next local number.'],
+          'local-sequence': mockLocalSequence,
         },
       },
     ],

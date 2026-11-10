@@ -160,6 +160,18 @@ and published exports/declarations. Release tests cover version/changelog checks
 ordering, conflicts, artifact integrity and partial-release recovery without contacting npm or
 GitHub. Workflow policy tests parse YAML structurally rather than depending on its formatting.
 
+### Unit-test naming conventions
+
+Prefix every test double with `mock` followed by the mocked subject in PascalCase, such as
+`mockRequest`, `mockRun`, `mockPause` or `mockPublished`. This applies to replacement functions,
+stubbed values, simulated state, mock options, dependency bundles and mock factories. Prefix spies
+and recorded observations with `spy`, such as `spyRequest` or `spyCalls`. When a replacement both
+simulates behavior and records calls, use `mock` for the replacement and `spy` for its call history.
+Preserve production interface keys through explicit mappings, for example
+`{ request: mockRequest }`. Ordinary test inputs, real filesystem fixtures, assertions and helpers
+that invoke real implementations do not need either prefix. Follow this convention for all new and
+modified unit tests.
+
 ## Releases and account setup
 
 Use feature branches and PRs. Only this repository uses appName config for commit subjects and PR
