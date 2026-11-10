@@ -88,3 +88,21 @@ test('release keeps explicit recovery separate from automatic retry detection', 
 
   assert.equal(checkout.with['fetch-depth'], undefined);
 });
+
+test('PR policy checks include title edits and have commit history available', () => {
+  const validation = workflow('validate');
+  const { steps } = validation.jobs.validate;
+  const policy = steps.find((step) => step.run === 'node scripts/validate-pr.mjs');
+  const checkout = steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+
+  assert.deepEqual(validation.on.pull_request.types, [
+    'opened',
+    'synchronize',
+    'reopened',
+    'edited',
+  ]);
+
+  assert.equal(policy.if, "github.event_name == 'pull_request'");
+
+  assert.equal(checkout.with['fetch-depth'], 0);
+});

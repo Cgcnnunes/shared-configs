@@ -2,6 +2,7 @@ name: Validate
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -14,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,3 +31,7 @@ jobs:
 
       - name: Run verification
         run: npm run verify
+
+      - name: Validate PR branch, title and commit IDs
+        if: github.event_name == 'pull_request'
+        run: node scripts/validate-pr.mjs
