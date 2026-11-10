@@ -30,6 +30,12 @@ export function prepareRelease(directory, packageName) {
   }
 
   const changelog = readFileSync(join(directory, packagePath, 'CHANGELOG.md'), 'utf8');
+  const notes = releaseNotes(changelog, version);
+
+  return { name, notes, packagePath, tag: `${packageName}-v${version}`, version };
+}
+
+export function releaseNotes(changelog, version) {
   const sections = [...changelog.matchAll(/^## ([^\r\n]+)\r?\n([\s\S]*?)(?=^## |(?![\s\S]))/gmu)];
   const entries = sections.filter((section) => section[1].startsWith(`${version} (`));
   const entry = entries[0];
@@ -46,7 +52,7 @@ export function prepareRelease(directory, packageName) {
     throw new Error(`Add a nonempty changelog entry: ## ${version} (YYYY-MM-DD)`);
   }
 
-  return { name, notes: entry[2].trim(), packagePath, tag: `${packageName}-v${version}`, version };
+  return entry[2].trim();
 }
 
 function command(program, args, directory) {

@@ -174,10 +174,21 @@ modified unit tests.
 
 ## Releases and account setup
 
-Use feature branches and PRs. Only this repository uses appName config for commit subjects and PR
-titles, for example `feat(config-00001): add a preset`. Consumer apps keep their own appName. The
-config validates syntax but does not allocate IDs. There are no installed Git hooks. CI runs npm run
-verify on PRs and main pushes; configure branch protection separately.
+Use branches named `config-xxxxx`, with exactly five digits from 00001 to 99999 and no prefix or
+slash. Allocate one unused ID per branch/PR by checking local/remote branches and existing commit
+subjects; use the next unused number. Keep that ID for every commit on the branch and the PR title:
+for branch `config-00008`, use `feat(config-00008): add a preset` or
+`fix(config-00008): correct a preset`. Do not increment the ID for subsequent commits in the same
+PR. Allowed types are feat, chore, refactor, fix and doc; descriptions start with a lowercase ASCII
+letter and the complete subject must be at most 120 characters.
+
+Only this repository uses appName config. Consumer apps keep their own appName and local Git
+policies; the published Commitlint factory does not enforce branches or allocate IDs. Repository PR
+validation checks branch names, PR titles and every non-merge commit introduced by the PR.
+Git-generated merge commits are excluded. Existing merged history is not rewritten or retroactively
+checked. There are no installed Git hooks. CI runs npm run verify on PRs and main pushes; configure
+branch protection to require Validate separately. Squash merges should retain the validated PR
+title.
 
 ### One-time account and workflow setup
 
@@ -240,6 +251,28 @@ unaffected packages.
 
 Run npm run lint:fix, npm run format and npm run verify, then commit the affected manifest,
 changelog, documentation, tests, implementation and root lockfile together through a reviewed PR.
+
+In the PR template, select exactly one release type for **each** package:
+
+| Selection       | Required version change                                |
+| --------------- | ------------------------------------------------------ |
+| Major           | `1.2.3` → `2.0.0` (reset minor and patch)              |
+| Minor           | `1.2.3` → `1.3.0` (reset patch)                        |
+| Patch           | `1.2.3` → `1.2.4`                                      |
+| Initial release | Keep unprepared initial `0.1.0`; prepare dated notes   |
+| No release      | Keep version unchanged (including repository-only PRs) |
+
+PR validation compares base/head manifests and the head lockfile against these selections and
+requires dated, nonempty changelog notes for every release selection. Initial release is allowed
+only while the base changelog still marks 0.1.0 as an unreleased initial version. Select No release
+for unaffected packages. Changes may accumulate under Unreleased without publishing. Checkboxes
+neither edit files nor trigger publication: prepare the bumps yourself using
+`npm version major|minor|patch --workspace <package> --no-git-tag-version`.
+
+The committed version determines both npm's version and the package-specific Git tag:
+`@cgcnnunes/eslint-config@1.2.3` corresponds to `eslint-config-v1.2.3`. The components are
+major.minor.patch, without zero-padding; a generic repository-wide `v1.2.3` tag is not used. The
+release workflow never reads PR checkboxes or invents a second version.
 
 ### Publish the merged version
 
