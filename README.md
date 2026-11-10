@@ -252,6 +252,28 @@ unaffected packages.
 Run npm run lint:fix, npm run format and npm run verify, then commit the affected manifest,
 changelog, documentation, tests, implementation and root lockfile together through a reviewed PR.
 
+In the PR template, select exactly one release type for **each** package:
+
+| Selection       | Required version change                                |
+| --------------- | ------------------------------------------------------ |
+| Major           | `1.2.3` → `2.0.0` (reset minor and patch)              |
+| Minor           | `1.2.3` → `1.3.0` (reset patch)                        |
+| Patch           | `1.2.3` → `1.2.4`                                      |
+| Initial release | Keep unprepared initial `0.1.0`; prepare dated notes   |
+| No release      | Keep version unchanged (including repository-only PRs) |
+
+PR validation compares base/head manifests and the head lockfile against these selections and
+requires dated, nonempty changelog notes for every release selection. Initial release is allowed
+only while the base changelog still marks 0.1.0 as an unreleased initial version. Select No release
+for unaffected packages. Changes may accumulate under Unreleased without publishing. Checkboxes
+neither edit files nor trigger publication: prepare the bumps yourself using
+`npm version major|minor|patch --workspace <package> --no-git-tag-version`.
+
+The committed version determines both npm's version and the package-specific Git tag:
+`@cgcnnunes/eslint-config@1.2.3` corresponds to `eslint-config-v1.2.3`. The components are
+major.minor.patch, without zero-padding; a generic repository-wide `v1.2.3` tag is not used. The
+release workflow never reads PR checkboxes or invents a second version.
+
 ### Publish the merged version
 
 In GitHub Actions, open [Release package](.github/workflows/release.yml), select **Run workflow**,

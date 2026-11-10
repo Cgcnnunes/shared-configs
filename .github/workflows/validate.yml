@@ -32,6 +32,6 @@ jobs:
       - name: Run verification
         run: npm run verify
 
-      - name: Validate PR branch, title and commit IDs
+      - name: Validate PR identity and package release selections
         if: github.event_name == 'pull_request'
         run: node scripts/validate-pr.mjs

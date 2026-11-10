@@ -7,6 +7,9 @@
   unused ID. Do not increment the ID for additional commits on that branch. Ask if IDs conflict.
 - Follow the repository Commitlint types: feat, chore, refactor, fix, doc. Do not rewrite merged
   history to retrofit these rules.
+- Select exactly one release type per package in PR bodies; match major/minor/patch selections to
+  committed versions, lockfile and dated changelog entries. Use No release for unchanged versions or
+  Initial release for preparing the unpublished initial 0.1.0.
 - Follow the [unit-test naming conventions](../README.md#unit-test-naming-conventions):
   `mock<Subject>` for test doubles and `spy<Subject>` for spies and recorded observations.
 - Use Node 24.x and run `npm run verify` before completing code changes. See the
