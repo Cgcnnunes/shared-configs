@@ -4,7 +4,7 @@ Versions apply only to @cgcnnunes/commitlint-config.
 
 ## Unreleased
 
-## 0.1.0 (unreleased initial version)
+## 0.1.0 (2026-11-10)
 
 - Require Node >=24.0.0 <25.0.0 (24.x LTS).
 - Add a Commitlint factory with configurable app slugs and five-digit commit scopes.
