@@ -22,6 +22,7 @@ permissions:
 concurrency:
   group: release-package-${{ inputs.package }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   release:
@@ -43,7 +44,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,5 +66,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_PACKAGE: ${{ inputs.package }}
-          RELEASE_RECOVER: ${{ inputs.recover || github.run_attempt > 1 }}
+          RELEASE_RECOVER: ${{ inputs.recover }}
+          RELEASE_RETRY: ${{ github.run_attempt > 1 }}
         run: node scripts/release.mjs

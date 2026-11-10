@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -66,6 +67,14 @@ function command(program, args, directory) {
   return result.stdout.trim();
 }
 
+export class HttpError extends Error {
+  constructor(url, response) {
+    super(`GET ${url} failed: ${response.status} ${response.statusText}`);
+
+    this.status = response.status;
+  }
+}
+
 async function requestJson(url, authenticated = false) {
   const headers = authenticated
     ? { Accept: 'application/vnd.github+json', Authorization: `Bearer ${process.env.GH_TOKEN}` }
@@ -77,15 +86,51 @@ async function requestJson(url, authenticated = false) {
   }
 
   if (!response.ok) {
-    throw new Error(`GET ${url} failed: ${response.status} ${response.statusText}`);
+    throw new HttpError(url, response);
   }
 
   return response.json();
 }
 
+async function waitForPublication(url, request, pause) {
+  const attempts = 6;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let problem = 'version is not visible yet';
+
+    try {
+      const published = await request(url);
+
+      if (published) {
+        return published;
+      }
+    } catch (error) {
+      const transient =
+        (error instanceof HttpError &&
+          (error.status === 408 || error.status === 429 || error.status >= 500)) ||
+        error instanceof TypeError ||
+        (error instanceof DOMException && error.name === 'TimeoutError');
+
+      if (!transient || attempt === attempts) {
+        throw error;
+      }
+
+      problem = error.message;
+    }
+
+    if (attempt === attempts) {
+      throw new Error(`npm version is still missing after ${attempts} verification attempts.`);
+    }
+
+    console.warn(`npm verification ${attempt}/${attempts}: ${problem}; retrying in 5 seconds.`);
+
+    await pause(5_000);
+  }
+}
+
 export async function release(
-  { directory = root, packageName, recover = false, sha },
-  { request = requestJson, run = command } = {},
+  { directory = root, packageName, recover = false, retry = false, sha },
+  { pause = setTimeout, request = requestJson, run = command } = {},
 ) {
   const prepared = prepareRelease(directory, packageName);
   const { name, notes, packagePath, tag, version } = prepared;
@@ -114,12 +159,13 @@ export async function release(
   const releaseUrl = `https://api.github.com/repos/${repository}/releases/tags/${tag}`;
   const published = await request(versionUrl);
   const existingRelease = await request(releaseUrl, true);
+  const recovering = recover || (retry && Boolean(published));
 
   if (tagCommit && tagCommit !== sha) {
     throw new Error(`${tag} already points to another commit; tags must never be moved.`);
   }
 
-  if (!recover && (published || tagCommit || existingRelease)) {
+  if (!recovering && (published || tagCommit || existingRelease)) {
     throw new Error('Version, tag or GitHub release already exists. Review before using recovery.');
   }
 
@@ -152,20 +198,19 @@ export async function release(
       throw new Error('Packed artifact does not match the selected release.');
     }
 
-    if (!recover) {
+    if (!recovering) {
       execute('npm', [
         'publish',
         join(temporary, packed.filename),
         '--access',
         'public',
-        '--provenance',
         '--ignore-scripts',
         '--registry',
         registry,
       ]);
     }
 
-    const verified = recover ? published : await request(versionUrl);
+    const verified = recovering ? published : await waitForPublication(versionUrl, request, pause);
 
     if (verified?.version !== version || verified.dist?.integrity !== packed.integrity) {
       throw new Error('npm version/integrity verification failed; no tag or release was created.');
@@ -215,6 +260,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
   await release({
     packageName: process.env.RELEASE_PACKAGE,
     recover: process.env.RELEASE_RECOVER === 'true',
+    retry: process.env.RELEASE_RETRY === 'true',
     sha: process.env.GITHUB_SHA,
   });
 }

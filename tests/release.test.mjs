@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { prepareRelease, release } from '../scripts/release.mjs';
+import { HttpError, prepareRelease, release } from '../scripts/release.mjs';
 
 const sha = 'a'.repeat(40);
 const integrity = 'sha512-test-artifact';
@@ -38,7 +38,9 @@ function fixture(t) {
 
 function harness(options = {}) {
   const calls = [];
+  const responses = [...(options.verificationResponses ?? [])];
   let uploaded = options.published ?? null;
+  let didPublish = false;
   let temporary;
   const run = (program, args) => {
     calls.push([program, ...args]);
@@ -74,6 +76,8 @@ function harness(options = {}) {
         ]);
 
       case 'npm publish':
+        didPublish = true;
+
         uploaded = options.afterPublish ?? published;
 
         return '';
@@ -97,12 +101,26 @@ function harness(options = {}) {
       throw new Error('Registry unavailable');
     }
 
+    if (didPublish && url.startsWith('https://registry.npmjs.org') && responses.length) {
+      const response = responses.shift();
+
+      if (response instanceof Error) {
+        throw response;
+      }
+
+      return response;
+    }
+
     return url.startsWith('https://registry.npmjs.org')
       ? uploaded
       : (options.existingRelease ?? null);
   };
 
-  return { calls, dependencies: { request, run }, temporary: () => temporary };
+  const pause = async (milliseconds) => {
+    calls.push(['pause', milliseconds]);
+  };
+
+  return { calls, dependencies: { pause, request, run }, temporary: () => temporary };
 }
 
 test('prepares only the selected package version and changelog notes', (t) => {
@@ -193,13 +211,153 @@ test('publishes the packed artifact, verifies npm, then creates the tag and rele
     ['git', 'tag', tag, sha],
   );
 
-  assert.ok(
-    calls
-      .find(([program, operation]) => program === 'npm' && operation === 'publish')
-      .includes('--provenance'),
+  assert.equal(existsSync(temporary()), false);
+});
+
+for (const response of [
+  null,
+  new HttpError('npm', { status: 408, statusText: 'Request Timeout' }),
+  new HttpError('npm', { status: 429, statusText: 'Too Many Requests' }),
+  new HttpError('npm', { status: 503, statusText: 'Service Unavailable' }),
+  new TypeError('fetch failed'),
+  new DOMException('Request timed out', 'TimeoutError'),
+]) {
+  test(`publication verification retries transient responses: ${response}`, async (t) => {
+    const input = fixture(t);
+    const { calls, dependencies } = harness({ verificationResponses: [response, published] });
+
+    await release(input, dependencies);
+
+    assert.deepEqual(
+      calls.filter(([program]) => program === 'pause'),
+      [['pause', 5_000]],
+    );
+
+    assert.equal(
+      calls.filter(([program, operation]) => program === 'npm' && operation === 'publish').length,
+      1,
+    );
+
+    assert.equal(
+      calls.some(([program, operation]) => program === 'git' && operation === 'tag'),
+      true,
+    );
+  });
+}
+
+for (const response of [
+  null,
+  new HttpError('npm', { status: 503, statusText: 'Service Unavailable' }),
+]) {
+  test(`publication verification stops after six attempts: ${response}`, async (t) => {
+    const input = fixture(t);
+    const { calls, dependencies, temporary } = harness({
+      verificationResponses: Array(6).fill(response),
+    });
+
+    await assert.rejects(release(input, dependencies));
+
+    assert.equal(calls.filter(([program]) => program === 'GET').length, 8);
+
+    assert.equal(calls.filter(([program]) => program === 'pause').length, 5);
+
+    assert.equal(
+      calls.some(([program, operation]) => program === 'git' && operation === 'tag'),
+      false,
+    );
+
+    assert.equal(existsSync(temporary()), false);
+  });
+}
+
+for (const response of [
+  new HttpError('npm', { status: 401, statusText: 'Unauthorized' }),
+  new HttpError('npm', { status: 403, statusText: 'Forbidden' }),
+  new SyntaxError('Invalid registry JSON'),
+  { dist: { integrity: 'wrong' }, version: '0.1.1' },
+  { dist: { integrity }, version: '0.1.2' },
+]) {
+  test(`publication verification fails immediately on nontransient errors: ${response}`, async (t) => {
+    const input = fixture(t);
+    const { calls, dependencies } = harness({ verificationResponses: [response, published] });
+
+    await assert.rejects(release(input, dependencies));
+
+    assert.equal(
+      calls.some(([program]) => program === 'pause'),
+      false,
+    );
+
+    assert.equal(
+      calls.some(([program, operation]) => program === 'git' && operation === 'tag'),
+      false,
+    );
+  });
+}
+
+test('reruns publish normally when the original attempt never published', async (t) => {
+  const input = { ...fixture(t), retry: true };
+  const { calls, dependencies } = harness();
+
+  await release(input, dependencies);
+
+  assert.equal(
+    calls.filter(([program, operation]) => program === 'npm' && operation === 'publish').length,
+    1,
+  );
+});
+
+test('reruns recover existing publications without republishing', async (t) => {
+  const input = { ...fixture(t), retry: true };
+  const { calls, dependencies } = harness({ published });
+
+  await release(input, dependencies);
+
+  assert.equal(
+    calls.some(([program, operation]) => program === 'npm' && operation === 'publish'),
+    false,
   );
 
-  assert.equal(existsSync(temporary()), false);
+  assert.equal(
+    calls.some(([program, operation]) => program === 'git' && operation === 'tag'),
+    true,
+  );
+});
+
+test('automatic reruns retain integrity and tag-conflict safeguards', async (t) => {
+  const input = { ...fixture(t), retry: true };
+
+  for (const options of [
+    { published: { dist: { integrity: 'wrong' }, version: '0.1.1' } },
+    { published, tagCommit: 'b'.repeat(40) },
+    { tagCommit: sha },
+  ]) {
+    const { calls, dependencies } = harness(options);
+
+    await assert.rejects(release(input, dependencies));
+
+    assert.equal(
+      calls.some(([program, operation]) => program === 'npm' && operation === 'publish'),
+      false,
+    );
+
+    assert.equal(
+      calls.some(([program, operation]) => program === 'git' && operation === 'tag'),
+      false,
+    );
+  }
+});
+
+test('explicit recovery never publishes even on a rerun with no npm version', async (t) => {
+  const input = { ...fixture(t), recover: true, retry: true };
+  const { calls, dependencies } = harness();
+
+  await assert.rejects(release(input, dependencies), /already published/u);
+
+  assert.equal(
+    calls.some(([program]) => program === 'npm'),
+    false,
+  );
 });
 
 for (const options of [

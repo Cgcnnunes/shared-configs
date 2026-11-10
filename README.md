@@ -122,8 +122,9 @@ echo "feat(reader-00001): add settings" | npx --no-install commitlint
 
 Use Node 24.x locally; [.nvmrc](.nvmrc) selects that major. Install and activate Node 24 in your
 version manager before running npm commands. Both validation and release workflows read this file
-and select the latest available 24.x patch, without a multi-version matrix. [.npmrc](.npmrc) enables
-engine-strict so npm installs reject unsupported Node versions.
+and select the latest available 24.x patch, without a multi-version matrix. The packages declare
+compatibility with the full 24.x range, but CI does not separately test its minimum version.
+[.npmrc](.npmrc) enables engine-strict so npm installs reject unsupported Node versions.
 
 Each published package declares `engines.node: ">=24.0.0 <25.0.0"`: the minimum is inclusive and the
 maximum exclusive. npm reads this metadata when consumers install the package, warning about
@@ -149,13 +150,15 @@ Both workflows cache npm downloads through setup-node, keyed by runner OS/archit
 lockfile. Clean npm ci installs still run every time. Installs prefer cached downloads and fetch
 missing packages from the registry; the isolated consumer test uses the same npm cache. Neither
 node_modules nor verification results are cached, and cache hits never bypass release safeguards.
-GitHub cache branch scoping applies: PR caches do not become trusted main-branch release caches.
+GitHub cache branch scoping applies: PR caches do not become trusted main-branch release caches. The
+--prefer-offline flag skips freshness checks for cached downloads; it does not disable network
+access. npm ci still honors exact lockfile versions and verifies downloaded package integrity.
 
 Tests cover configurable app scopes, malformed subjects and exact length limits, formatting, sorting
 and semantic lint rules, explicit runtime globals, typed linting and tsconfig paths, local overrides
 and published exports/declarations. Release tests cover version/changelog checks, publication
 ordering, conflicts, artifact integrity and partial-release recovery without contacting npm or
-GitHub.
+GitHub. Workflow policy tests parse YAML structurally rather than depending on its formatting.
 
 ## Releases and account setup
 
@@ -237,9 +240,15 @@ npm run verify. It rejects non-main runs, dirty worktrees, inconsistent manifest
 unprepared changelogs, and existing npm versions, tags or GitHub releases. Only stable x.y.z
 versions are supported; prereleases are intentionally not handled.
 
-It packs only the selected package, publishes that exact tarball publicly to npm with provenance,
-and verifies the registry's version and SHA-512 integrity against the local artifact. Only then does
-it push a package tag and create a GitHub release with that package's changelog entry:
+The separate Validate workflow also runs on PRs and pushes to main. Release does not wait for or
+inspect that workflow's result: its own full verification is the publication gate. Wait for the
+main-push validation to succeed before dispatching a release. Both use the same Node major and
+verification command, but the latest patch may change between runs.
+
+It packs only the selected package, publishes that exact tarball publicly to npm with provenance
+(generated automatically by trusted publishing), and verifies the registry's version and SHA-512
+integrity against the local artifact. Only then does it push a package tag and create a GitHub
+release with that package's changelog entry:
 
 | npm package                  | Example version | GitHub tag               |
 | ---------------------------- | --------------- | ------------------------ |
@@ -250,7 +259,10 @@ it push a package tag and create a GitHub release with that package's changelog 
 Multiple tags can point to the same commit. GitHub releases are not marked as the repository-wide
 "latest" release because packages have independent versions. npm receives the package version, not
 the Git tag; stable publications use npm's `latest` dist-tag. Release runs are serialized per
-package and are not cancelled by later dispatches. Different packages can release in parallel.
+package; active runs are not cancelled by later dispatches. The concurrency queue retains up to 100
+pending runs per package; additional runs are cancelled when that queue is full. Different packages
+can release in parallel. Duplicate normal dispatches fail the existing-version checks rather than
+republishing.
 
 Consumers can update just the released package:
 
@@ -266,14 +278,21 @@ updates through reviewed PRs; never import a moving Git branch as a shared confi
 ### Recover a partial release
 
 npm publication and GitHub metadata creation cannot be atomic. If publication succeeds but registry
-verification, tag push or GitHub release creation fails, inspect the failure before retrying.
-Registry propagation delays can also cause verification to fail safely without creating a tag.
+verification, tag push or GitHub release creation fails, inspect the failure before retrying. After
+a successful publish, registry verification makes up to six attempts, waiting five seconds between
+attempts when a version is not yet visible or a transient network/timeout, HTTP 408/429 or server
+error occurs. Each request has a 30-second timeout. Authentication errors, malformed responses, and
+version/integrity mismatches fail immediately. Exhausted retries fail without creating a tag.
+Publication itself is never automatically retried within a job.
 
 To recover, **re-run the original workflow run's failed jobs**, retaining its original commit and
-inputs. Re-runs automatically use recovery mode, so a failed run that never published must instead
-be started as a fresh dispatch after fixing the cause. Alternatively, dispatch with **recover**
-checked only if `main` still points to the exact original release commit (also use this for
-first-publication bootstrap). Do not dispatch from a newer main commit to repair an older release.
+inputs. Normal-mode re-runs check npm first: if the version exists, they verify its integrity and
+recover missing metadata without republishing; if it is absent, they attempt normal publication.
+Registry lookup errors stop the job rather than being treated as an absent version. Explicit
+recovery remains recovery-only on every attempt and fails if npm has no version. Alternatively,
+dispatch with **recover** checked only if `main` still points to the exact original release commit
+(also use this for first-publication bootstrap). Do not dispatch from a newer main commit to repair
+an older release.
 
 Recovery never publishes to npm. It requires the npm version to exist and its tarball integrity to
 match a fresh pack of the selected commit. Existing remote tags must point to that same commit;
