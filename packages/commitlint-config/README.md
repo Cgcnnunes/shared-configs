@@ -1,7 +1,6 @@
 # @cgcnnunes/commitlint-config
 
-A Commitlint 21 configuration factory. Requires Node 22.22.2+ in the 22.x line, or Node 24+. ESM
-only.
+A Commitlint 21 configuration factory. Requires Node >=24.0.0 <25.0.0 (24.x LTS). ESM only.
 
 ```js
 // commitlint.config.mjs in each consuming application

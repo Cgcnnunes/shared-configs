@@ -1,8 +1,8 @@
 # @cgcnnunes/eslint-config
 
-ESLint 10 flat configs for JavaScript and type-aware TypeScript. Requires Node 22.22.2+ in the 22.x
-line, or Node 24+. ESM only. See the repository README for installation, composition, compatibility
-and release instructions.
+ESLint 10 flat configs for JavaScript and type-aware TypeScript. Requires Node >=24.0.0 <25.0.0
+(24.x LTS). ESM only. See the repository README for installation, composition, compatibility and
+release instructions.
 
 Current transitive tooling needs a minimatch ^11.0.1 override in the consumer's root package.json
 for GHSA-g3hv-75wg-m249. npm does not propagate overrides from dependencies. See the repository

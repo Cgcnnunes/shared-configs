@@ -92,6 +92,8 @@ test('packed packages work in an isolated consumer, including TypeScript declara
       }),
     );
 
+    writeFileSync(join(directory, '.npmrc'), 'engine-strict=true\n');
+
     writeFileSync(
       join(directory, 'eslint.config.mjs'),
       `import { createJavaScriptConfig } from '@cgcnnunes/eslint-config';
@@ -163,6 +165,14 @@ export { js, ts, commits, format };
 
     npm(['install', '--ignore-scripts', '--no-audit', '--no-fund'], directory);
 
+    for (const pkg of packages) {
+      const installed = JSON.parse(
+        readFileSync(join(directory, 'node_modules', pkg.name, 'package.json'), 'utf8'),
+      );
+
+      assert.equal(installed.engines.node, '>=24.0.0 <25.0.0');
+    }
+
     npm(['run', 'check'], directory);
 
     npm(['run', 'lint'], directory);
@@ -190,6 +200,58 @@ export { js, ts, commits, format };
       assert.match(
         result.stdout + result.stderr,
         command === 'lint:invalid' ? /no-var/u : /app-subject/u,
+      );
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test('individual release artifacts match workspace packs and are reproducible', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cgcnnunes-config-artifacts-'));
+
+  try {
+    const together = join(directory, 'together');
+    const individual = join(directory, 'individual');
+
+    mkdirSync(together);
+
+    mkdirSync(individual);
+
+    const packed = JSON.parse(
+      npm(
+        ['pack', '--workspaces', '--ignore-scripts', '--json', '--pack-destination', together],
+        root,
+      ),
+    );
+
+    assert.equal(packed.length, 3);
+
+    for (const artifact of packed) {
+      const packageName = artifact.name.split('/')[1];
+      const [selected] = JSON.parse(
+        npm(
+          [
+            'pack',
+            `./packages/${packageName}`,
+            '--ignore-scripts',
+            '--json',
+            '--pack-destination',
+            individual,
+          ],
+          root,
+        ),
+      );
+
+      assert.equal(selected.name, artifact.name);
+
+      assert.equal(selected.version, artifact.version);
+
+      assert.equal(selected.integrity, artifact.integrity);
+
+      assert.deepEqual(
+        readFileSync(join(individual, selected.filename)),
+        readFileSync(join(together, artifact.filename)),
       );
     }
   } finally {

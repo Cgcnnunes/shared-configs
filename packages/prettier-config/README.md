@@ -1,8 +1,8 @@
 # @cgcnnunes/prettier-config
 
 Prettier 3 defaults: single quotes, semicolons, two-space indentation, trailing commas, LF endings,
-100-character print width, wrapped prose and arrow parentheses. Requires Node 22.22.2+ in the 22.x
-line, or Node 24+. ESM only.
+100-character print width, wrapped prose and arrow parentheses. Requires Node >=24.0.0 <25.0.0 (24.x
+LTS). ESM only.
 
 Install the package and Prettier, then add to your application's package.json:
 
