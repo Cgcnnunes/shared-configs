@@ -1,0 +1,71 @@
+name: Release package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to release
+        required: true
+        type: choice
+        options:
+          - eslint-config
+          - prettier-config
+          - commitlint-config
+      recover:
+        description: Complete tags/releases for an already published npm version
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-package-${{ inputs.package }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Require main in the source repository
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          test "$RELEASE_REF" = refs/heads/main
+          test "$RELEASE_REPOSITORY" = Cgcnnunes/shared-configs
+
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          check-latest: true
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Ensure npm supports trusted publishing
+        run: npm install --global npm@11 --prefer-offline --no-audit --no-fund
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Run verification
+        run: npm run verify
+
+      - name: Publish and complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PACKAGE: ${{ inputs.package }}
+          RELEASE_RECOVER: ${{ inputs.recover }}
+          RELEASE_RETRY: ${{ github.run_attempt > 1 }}
+        run: node scripts/release.mjs

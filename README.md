@@ -18,14 +18,14 @@ installation examples below become available only after the first npm publicatio
 username does not establish npm scope ownership. Confirm access to the cgcnnunes npm account before
 publishing.
 
-Requires Node 22.22.2+ in the 22.x line, or Node 24+, npm 10+, and ESM configuration files. Tested
-tool majors: ESLint 10, Prettier 3 and Commitlint 21. TypeScript must be >=4.8.4 and <6.1.0;
+Requires Node 24.x LTS (`>=24.0.0 <25.0.0`), npm 10+, and ESM configuration files. Tested tool
+majors: ESLint 10, Prettier 3 and Commitlint 21. TypeScript must be >=4.8.4 and <6.1.0;
 development/tests use 6.0.x because the current parser does not support TypeScript 7. Peer ranges
 declare supported versions; upgrade them with compatibility tests.
 
 These are JavaScript configuration modules with TypeScript declarations, not an application
-requiring a compile step. React-specific rules, Cloudflare globals, tsconfig presets, reusable
-workflows and release automation are not provided yet.
+requiring a compile step. React-specific rules, Cloudflare globals, tsconfig presets and reusable
+consumer workflows are not provided. This repository includes a manual per-package release workflow.
 
 ## Use in an app
 
@@ -120,6 +120,18 @@ echo "feat(reader-00001): add settings" | npx --no-install commitlint
 
 ## Develop and validate
 
+Use Node 24.x locally; [.nvmrc](.nvmrc) selects that major. Install and activate Node 24 in your
+version manager before running npm commands. Both validation and release workflows read this file
+and select the latest available 24.x patch, without a multi-version matrix. The packages declare
+compatibility with the full 24.x range, but CI does not separately test its minimum version.
+[.npmrc](.npmrc) enables engine-strict so npm installs reject unsupported Node versions.
+
+Each published package declares `engines.node: ">=24.0.0 <25.0.0"`: the minimum is inclusive and the
+maximum exclusive. npm reads this metadata when consumers install the package, warning about
+unsupported runtimes by default. To reject incompatible installs, consuming repositories should also
+commit a root `.npmrc` containing `engine-strict=true`. This repository's .npmrc is not inherited by
+consumers. Version files select Node; package engine metadata declares compatibility.
+
 ```sh
 npm ci
 npm run lint:fix
@@ -134,9 +146,31 @@ registry access and Git, and removes its own temporary directories afterward. A 
 workspace check verifies that a Commitlint-only version bump preserves the other package versions
 and their lockfile records. No consumer app is modified.
 
+Both workflows cache npm downloads through setup-node, keyed by runner OS/architecture and the root
+lockfile. Clean npm ci installs still run every time. Installs prefer cached downloads and fetch
+missing packages from the registry; the isolated consumer test uses the same npm cache. Neither
+node_modules nor verification results are cached, and cache hits never bypass release safeguards.
+GitHub cache branch scoping applies: PR caches do not become trusted main-branch release caches. The
+--prefer-offline flag skips freshness checks for cached downloads; it does not disable network
+access. npm ci still honors exact lockfile versions and verifies downloaded package integrity.
+
 Tests cover configurable app scopes, malformed subjects and exact length limits, formatting, sorting
 and semantic lint rules, explicit runtime globals, typed linting and tsconfig paths, local overrides
-and published exports/declarations.
+and published exports/declarations. Release tests cover version/changelog checks, publication
+ordering, conflicts, artifact integrity and partial-release recovery without contacting npm or
+GitHub. Workflow policy tests parse YAML structurally rather than depending on its formatting.
+
+### Unit-test naming conventions
+
+Prefix every test double with `mock` followed by the mocked subject in PascalCase, such as
+`mockRequest`, `mockRun`, `mockPause` or `mockPublished`. This applies to replacement functions,
+stubbed values, simulated state, mock options, dependency bundles and mock factories. Prefix spies
+and recorded observations with `spy`, such as `spyRequest` or `spyCalls`. When a replacement both
+simulates behavior and records calls, use `mock` for the replacement and `spy` for its call history.
+Preserve production interface keys through explicit mappings, for example
+`{ request: mockRequest }`. Ordinary test inputs, real filesystem fixtures, assertions and helpers
+that invoke real implementations do not need either prefix. Follow this convention for all new and
+modified unit tests.
 
 ## Releases and account setup
 
@@ -145,15 +179,19 @@ titles, for example `feat(config-00001): add a preset`. Consumer apps keep their
 config validates syntax but does not allocate IDs. There are no installed Git hooks. CI runs npm run
 verify on PRs and main pushes; configure branch protection separately.
 
-Before the first publication:
+### One-time account and workflow setup
 
 1. Sign in to the cgcnnunes npm account in your own terminal and configure npm two-factor
    authentication. Do not put tokens, recovery codes or credentials in this repository or chat.
 2. Verify account ownership with npm whoami. Confirm all three scoped names are available and that
    public distribution under UNLICENSED is intended.
-3. Run npm run verify, review package contents with npm pack --workspaces --dry-run, and review the
-   release changes.
-4. An authorized publisher publishes each reviewed package separately:
+3. Create a GitHub environment named `npm`, restrict deployments to `main`, and optionally require
+   approval. Ensure repository rules allow the release workflow's GITHUB_TOKEN to create package
+   tags. Protect `main` with PR review and required validation checks.
+4. Bootstrap each package with a first manual publication: npm trusted publisher settings are
+   configured on existing packages. First prepare a dated 0.1.0 changelog entry as described below,
+   merge the reviewed PR, then check out that exact main commit in a clean worktree. Run npm ci, npm
+   run verify and npm pack --workspaces --dry-run before publishing:
 
    ```sh
    npm publish --workspace @cgcnnunes/eslint-config --access public
@@ -162,13 +200,27 @@ Before the first publication:
    ```
 
    The private workspace root is not published. Publishing is not atomic; verify each
-   package/version before retrying a partial failure.
+   package/version before retrying a partial failure. Use the recovery procedure below to create the
+   initial tags and GitHub releases from the same commit.
 
-5. After verifying each published package, tag its exact release commit with the package name and
-   version: eslint-config-v0.1.0, prettier-config-v0.1.0 and commitlint-config-v0.1.0. Multiple tags
-   can point to the same commit. No automatic publishing workflow is configured.
+5. In **each package's npm settings**, add a GitHub Actions trusted publisher:
+   - Organization or user: `Cgcnnunes`
+   - Repository: `shared-configs`
+   - Workflow filename: `release.yml`
+   - Environment: `npm`
+   - Allow direct publishing with `npm publish`.
 
-### Subsequent independent releases
+   Trusted publishing uses GitHub OIDC; no NPM_TOKEN or NODE_AUTH_TOKEN secret is required.
+   Configure each publisher shortly before its first automated publication: npm currently requires
+   validation by a successful publish within two days of configuration. Recovery does not publish
+   and therefore does not validate this configuration. Recreate an expired publisher if needed. The
+   workflow uses a GitHub-hosted runner, Node 24 and npm 11 (OIDC requires npm >=11.5.1). Keep the
+   source repository public for provenance. Review the
+   [npm trusted publishing requirements](https://docs.npmjs.com/trusted-publishers/) and
+   [provenance transparency notice](https://docs.npmjs.com/generating-provenance-statements/) before
+   enabling publication.
+
+### Prepare an independent release
 
 Only bump and publish packages whose shipped content or compatibility changed. The private root
 version is not a release train. For a compatible Commitlint-only fix, run from the repository root:
@@ -188,18 +240,43 @@ unaffected packages.
 
 Run npm run lint:fix, npm run format and npm run verify, then commit the affected manifest,
 changelog, documentation, tests, implementation and root lockfile together through a reviewed PR.
-Publish the prepared version from the merged, verified commit:
 
-```sh
-npm publish --workspace @cgcnnunes/commitlint-config --access public
-npm view @cgcnnunes/commitlint-config@0.1.1 version
-git tag commitlint-config-v0.1.1
-git push origin commitlint-config-v0.1.1
-```
+### Publish the merged version
 
-The example assumes the previous version was 0.1.0. Substitute the actual prepared version and
-verify that npm reports it before creating/pushing the tag. Create a GitHub release for that tag
-using that package's changelog entry. Consumers can update just this package:
+In GitHub Actions, open [Release package](.github/workflows/release.yml), select **Run workflow**,
+choose branch `main` and the affected package, and leave **recover** unchecked. Approve the `npm`
+environment deployment if configured. Repeat separately for any other changed packages.
+
+The workflow checks out the immutable commit selected at dispatch, installs dependencies and runs
+npm run verify. It rejects non-main runs, dirty worktrees, inconsistent manifest/lockfile versions,
+unprepared changelogs, and existing npm versions, tags or GitHub releases. Only stable x.y.z
+versions are supported; prereleases are intentionally not handled.
+
+The separate Validate workflow also runs on PRs and pushes to main. Release does not wait for or
+inspect that workflow's result: its own full verification is the publication gate. Wait for the
+main-push validation to succeed before dispatching a release. Both use the same Node major and
+verification command, but the latest patch may change between runs.
+
+It packs only the selected package, publishes that exact tarball publicly to npm with provenance
+(generated automatically by trusted publishing), and verifies the registry's version and SHA-512
+integrity against the local artifact. Only then does it push a package tag and create a GitHub
+release with that package's changelog entry:
+
+| npm package                  | Example version | GitHub tag               |
+| ---------------------------- | --------------- | ------------------------ |
+| @cgcnnunes/eslint-config     | 0.2.0           | eslint-config-v0.2.0     |
+| @cgcnnunes/prettier-config   | 0.1.1           | prettier-config-v0.1.1   |
+| @cgcnnunes/commitlint-config | 0.1.1           | commitlint-config-v0.1.1 |
+
+Multiple tags can point to the same commit. GitHub releases are not marked as the repository-wide
+"latest" release because packages have independent versions. npm receives the package version, not
+the Git tag; stable publications use npm's `latest` dist-tag. Release runs are serialized per
+package; active runs are not cancelled by later dispatches. The concurrency queue retains up to 100
+pending runs per package; additional runs are cancelled when that queue is full. Different packages
+can release in parallel. Duplicate normal dispatches fail the existing-version checks rather than
+republishing.
+
+Consumers can update just the released package:
 
 ```sh
 npm install --save-dev --save-exact @cgcnnunes/commitlint-config@0.1.1
@@ -209,6 +286,31 @@ Do not republish a version or move a published tag. Use a major version for brea
 failing rules or dropped compatibility (even during this initial 0.x series), a minor version for
 additive opt-in functionality, and a patch for compatible fixes. Consumers adopt exact version
 updates through reviewed PRs; never import a moving Git branch as a shared configuration.
+
+### Recover a partial release
+
+npm publication and GitHub metadata creation cannot be atomic. If publication succeeds but registry
+verification, tag push or GitHub release creation fails, inspect the failure before retrying. After
+a successful publish, registry verification makes up to six attempts, waiting five seconds between
+attempts when a version is not yet visible or a transient network/timeout, HTTP 408/429 or server
+error occurs. Each request has a 30-second timeout. Authentication errors, malformed responses, and
+version/integrity mismatches fail immediately. Exhausted retries fail without creating a tag.
+Publication itself is never automatically retried within a job.
+
+To recover, **re-run the original workflow run's failed jobs**, retaining its original commit and
+inputs. Normal-mode re-runs check npm first: if the version exists, they verify its integrity and
+recover missing metadata without republishing; if it is absent, they attempt normal publication.
+Registry lookup errors stop the job rather than being treated as an absent version. Explicit
+recovery remains recovery-only on every attempt and fails if npm has no version. Alternatively,
+dispatch with **recover** checked only if `main` still points to the exact original release commit
+(also use this for first-publication bootstrap). Do not dispatch from a newer main commit to repair
+an older release.
+
+Recovery never publishes to npm. It requires the npm version to exist and its tarball integrity to
+match a fresh pack of the selected commit. Existing remote tags must point to that same commit;
+inconsistent or draft GitHub releases are rejected. Only missing tags and GitHub releases are
+created, and repeating a completed recovery is safe. If the artifact differs, stop and investigate;
+do not overwrite tags, unpublish or attempt to reuse a version.
 
 ## License
 
