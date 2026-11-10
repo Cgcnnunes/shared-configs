@@ -231,6 +231,84 @@ title.
    [provenance transparency notice](https://docs.npmjs.com/generating-provenance-statements/) before
    enabling publication.
 
+### Bootstrap a new package with staged publishing
+
+Use this alternative to the first direct publication above when you want to review and approve the
+initial npm artifact separately. Subsequent automated releases still use direct OIDC publishing.
+Staged publishing requires npm >=11.15.0, Node 24.x for this repository, package publish access, and
+an npm account with verified email and 2FA enabled for authorization and publishing.
+
+1. Prepare and merge the new package through a reviewed PR. Include its manifest, exports,
+   declarations, README, LICENSE, dated changelog and tests; update the root lockfile. Update
+   package allowlists, PR-template selections and release-workflow choices to include the new
+   package. The current Initial release selection supports the unpublished initial 0.1.0.
+2. Create the GitHub `npm` environment restricted to main if it does not exist. Update local main
+   with `git switch main` and `git pull --ff-only`. Activate Node 24 in your version manager. For
+   PowerShell with fnm:
+
+   ```powershell
+   fnm env --shell powershell | Out-String | Invoke-Expression
+   fnm use 24
+   node --version
+   npm --version
+   ```
+
+3. Run `npm ci`, `npm run verify` and `npm pack --workspaces --dry-run`. Confirm
+   `git status --short` is empty, record `git rev-parse HEAD`, and wait for that commit's main-push
+   validation to pass. Keep main at this commit until initial publication and recovery complete.
+4. Authenticate locally:
+
+   ```powershell
+   npm login --registry=https://registry.npmjs.org/ --auth-type=web
+   npm whoami --registry=https://registry.npmjs.org/
+   ```
+
+   Confirm the account owns the personal scope or has organization publish access. Complete
+   authentication yourself; never copy credentials, verification codes or authentication links into
+   Git, PR bodies or documentation.
+
+5. Stage **one package at a time** from its directory. For example, from the repository root:
+
+   ```powershell
+   Push-Location packages\eslint-config
+   npm stage publish . --access public --tag latest --registry=https://registry.npmjs.org/
+   Pop-Location
+   npm stage list @cgcnnunes/eslint-config
+   ```
+
+   Replace the package directory/name when adding another package. Record the stage ID returned by
+   npm. A new package gets a public `0.0.0-stage` placeholder; the staged 0.1.0 artifact is not live
+   until approved. A staged version reserves that version, so do not simultaneously retry direct
+   publishing or stage the same version again.
+
+6. Review with `npm stage view <stage-id>` or the npm website's **Staged Packages** tab. Confirm the
+   package, version, public access, latest dist-tag and artifact checksum. Wait for automated
+   validation to finish. Approve on the website, or run `npm stage approve <stage-id>` and complete
+   its 2FA prompt yourself. The optional temporary challenge bypass is not needed.
+7. Verify the approved version, substituting the actual package/version:
+
+   ```powershell
+   npm view @cgcnnunes/eslint-config@0.1.0 version dist.integrity --registry=https://registry.npmjs.org/
+   ```
+
+   Confirm 0.1.0 is live, not just the placeholder. Do not bump or reuse a version to troubleshoot
+   an uncertain publication; inspect registry and stage state first.
+
+8. Run **Release package** from main at the recorded commit, select that package and check
+   **recover**. It compares the published tarball integrity against a fresh pack before creating the
+   package tag and GitHub release. Repeat staging, review, approval and recovery for each package
+   individually.
+9. Configure the package's npm trusted publisher using the account/workflow/environment values above
+   shortly before its first automated release. Allow direct `npm publish` for the existing release
+   workflow. Staging and manual recovery do not validate the workflow's OIDC publisher.
+
+If npm rejects a request, stop and inspect the explicit error. A publishing 404 alone does not
+identify the cause: check the registry, account identity, scope permissions, email verification, 2FA
+and package/stage state. For account restrictions or a temporary publishing hold, follow npm's
+account notices and contact [npm support](https://www.npmjs.com/support) if necessary. Do not
+disable 2FA, rotate through new package names, repeatedly retry, or assume a suspension duration.
+Resolve the restriction before resuming; staged publishing does not bypass account restrictions.
+
 ### Prepare an independent release
 
 Only bump and publish packages whose shipped content or compatibility changed. The private root
