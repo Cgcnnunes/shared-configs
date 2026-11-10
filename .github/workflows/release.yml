@@ -51,12 +51,13 @@ jobs:
           node-version-file: .nvmrc
           check-latest: true
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Ensure npm supports trusted publishing
-        run: npm install --global npm@11
+        run: npm install --global npm@11 --prefer-offline --no-audit --no-fund
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Run verification
         run: npm run verify

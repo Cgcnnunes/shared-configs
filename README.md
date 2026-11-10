@@ -145,6 +145,12 @@ registry access and Git, and removes its own temporary directories afterward. A 
 workspace check verifies that a Commitlint-only version bump preserves the other package versions
 and their lockfile records. No consumer app is modified.
 
+Both workflows cache npm downloads through setup-node, keyed by runner OS/architecture and the root
+lockfile. Clean npm ci installs still run every time. Installs prefer cached downloads and fetch
+missing packages from the registry; the isolated consumer test uses the same npm cache. Neither
+node_modules nor verification results are cached, and cache hits never bypass release safeguards.
+GitHub cache branch scoping applies: PR caches do not become trusted main-branch release caches.
+
 Tests cover configurable app scopes, malformed subjects and exact length limits, formatting, sorting
 and semantic lint rules, explicit runtime globals, typed linting and tsconfig paths, local overrides
 and published exports/declarations. Release tests cover version/changelog checks, publication

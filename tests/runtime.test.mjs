@@ -49,3 +49,17 @@ test('release concurrency serializes only the selected package without cancellin
 
   assert.match(content, /cancel-in-progress: false/u);
 });
+
+test('workflows cache npm downloads by lockfile without skipping clean installs', () => {
+  for (const workflow of ['validate', 'release']) {
+    const content = read(`.github/workflows/${workflow}.yml`);
+
+    assert.match(content, /cache: npm/u);
+
+    assert.match(content, /cache-dependency-path: package-lock\.json/u);
+
+    assert.match(content, /run: npm ci --prefer-offline --no-audit --no-fund/u);
+
+    assert.doesNotMatch(content, /cache-hit/u);
+  }
+});

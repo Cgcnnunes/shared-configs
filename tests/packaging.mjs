@@ -163,7 +163,7 @@ export { js, ts, commits, format };
 `,
     );
 
-    npm(['install', '--ignore-scripts', '--no-audit', '--no-fund'], directory);
+    npm(['install', '--prefer-offline', '--ignore-scripts', '--no-audit', '--no-fund'], directory);
 
     for (const pkg of packages) {
       const installed = JSON.parse(
